@@ -1,0 +1,17 @@
+fastapi>=0.103.0
+uvicorn>=0.23.2
+langgraph
+langchain
+langchain-openai
+pydantic>=2.3.0
+pydantic-settings
+python-dotenv
+sqlalchemy
+psycopg2-binary
+python-multipart
+websockets
+ics
+aiofiles
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
