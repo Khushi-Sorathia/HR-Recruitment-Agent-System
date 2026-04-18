@@ -37,7 +37,19 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hr_admin}:${POSTGRES_PASSWORD:-hr_secret}@db:5432/${POSTGRES_DB:-hr_pipeline}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GOOGLE_CREDENTIALS_FILE: ${GOOGLE_CREDENTIALS_FILE:-credentials.json}
+      
+      # LangSmith Tracing
+      LANGCHAIN_TRACING_V2: ${LANGSMITH_TRACING:-true}
+      LANGCHAIN_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}
+      LANGCHAIN_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGSMITH_PROJECT:-"HR Recruitment Agent System"}
+      
+      # SMTP Fallback
+      SMTP_USER: ${SMTP_USER:-ks.felizina@gmail.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-uwkychtbffhbsgqr}
+      HR_TEAM_EMAIL: ${HR_TEAM_EMAIL:-ks.felizina@gmail.com}
     volumes:
       - backend_data:/app/data
     healthcheck:

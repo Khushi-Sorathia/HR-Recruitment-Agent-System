@@ -3,8 +3,10 @@ uvicorn>=0.23.2
 langgraph
 langchain
 langchain-openai
+langchain-google-genai
 pydantic>=2.3.0
 pydantic-settings
+pydantic[email]
 python-dotenv
 sqlalchemy
 psycopg2-binary
@@ -15,3 +17,5 @@ aiofiles
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
+PyPDF2
+langsmith
