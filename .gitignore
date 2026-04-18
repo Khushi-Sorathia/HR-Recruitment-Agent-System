@@ -20,5 +20,6 @@ dist-ssr/
 # App Specific
 backend/hr_pipeline.db
 backend/token.json
-backend/credentials.json
+credentials.json
 scratch/
+

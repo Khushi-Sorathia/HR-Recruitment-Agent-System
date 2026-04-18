@@ -39,6 +39,7 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
   // Interview State
   const [question, setQuestion] = useState('');
@@ -89,6 +90,24 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
     }
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setFile(e.dataTransfer.files[0]);
+    }
+  };
+
   // ─── Step 2: ATS Result → Proceed or Rejected ─────────────────────
 
   const proceedToInterview = () => {
@@ -98,11 +117,13 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
   // ─── Step 3: Technical Interview ───────────────────────────────────
 
   useEffect(() => {
+    let isCancelled = false;
     if (step === 'interview' && candidate && !ws) {
       const wsUrl = apiBase.replace('http', 'ws');
       const socket = new WebSocket(`${wsUrl}/api/ws/interview/${candidate.id}`);
 
       socket.onmessage = (event) => {
+        if (isCancelled) return;
         const data = JSON.parse(event.data);
         if (data.type === 'question') {
           setQuestion(data.text);
@@ -120,11 +141,15 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
       };
 
       socket.onerror = () => {
+        if (isCancelled) return;
         setUploadError('WebSocket connection failed. Is the backend running?');
       };
 
       setWs(socket);
-      return () => socket.close();
+      return () => {
+        isCancelled = true;
+        socket.close();
+      };
     }
   }, [step, candidate]);
 
@@ -170,27 +195,35 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
   // Step 1: Upload Form
   if (step === 'upload') {
     return (
-      <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
-        <h2 className="title">Candidate Application</h2>
+      <div className="glass-panel" style={{ maxWidth: '650px', margin: '2rem auto' }}>
+        <h2 className="title" style={{ textAlign: 'center' }}>Start Your Journey</h2>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '2rem' }}>
+          Welcome to the automated recruitment pipeline. Upload your resume to begin.
+        </p>
+
         {uploadError && <div className="error-banner">{uploadError}</div>}
+        
         <form onSubmit={submitResume}>
-          <input
-            id="name-input"
-            className="input-field"
-            placeholder="Full Name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            id="email-input"
-            className="input-field"
-            type="email"
-            placeholder="Email Address"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <input
+              id="name-input"
+              className="input-field"
+              placeholder="Full Name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              id="email-input"
+              className="input-field"
+              type="email"
+              placeholder="Email Address"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          
           <select
             id="role-select"
             className="input-field"
@@ -204,15 +237,31 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
             <option value="Frontend Developer">Frontend Developer</option>
             <option value="Backend Developer">Backend Developer</option>
           </select>
-          <input
-            id="resume-upload"
-            className="input-field"
-            type="file"
-            required
-            accept=".pdf"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-          <button id="submit-btn" type="submit" className="btn-primary" disabled={uploading}>
+          
+          <div 
+            className={`upload-area ${isDragging ? 'dragging' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => document.getElementById('resume-upload')?.click()}
+          >
+            <div className="upload-icon">📄</div>
+            <div className="upload-text">
+              {file ? file.name : 'Drag & drop your resume here'}
+            </div>
+            <div className="upload-subtext">
+              {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'or click to browse (.pdf only)'}
+            </div>
+            <input
+              id="resume-upload"
+              type="file"
+              style={{ display: 'none' }}
+              accept=".pdf"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+          </div>
+          
+          <button id="submit-btn" type="submit" className="btn-primary" disabled={uploading || !file}>
             {uploading ? 'Analyzing Resume...' : 'Submit Application'}
           </button>
         </form>
@@ -223,29 +272,35 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
   // Step 2: ATS Result
   if (step === 'ats_result' && atsResult) {
     return (
-      <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
-        <h2 className="title">Resume Analysis Result</h2>
+      <div className="glass-panel" style={{ maxWidth: '600px', margin: '2rem auto', textAlign: 'center' }}>
+        <h2 className="title">Resume Analysis Complete</h2>
         <div className="score-display">
           <div className={`score-circle ${atsResult.pass_screening ? 'score-pass' : 'score-fail'}`}>
             {atsResult.score.toFixed(0)}%
           </div>
-          <p className="score-label">ATS Score</p>
+          <p className="score-label">Intelligent ATS Score</p>
         </div>
-        <div className="reasoning-box">
-          <h4>Analysis</h4>
-          <p>{atsResult.reasoning}</p>
+        
+        <div style={{ background: 'var(--bg-surface-low)', padding: '1.5rem', borderRadius: '16px', marginBottom: '2rem', textAlign: 'left', border: '1px solid var(--ghost-border)' }}>
+          <h4 style={{ margin: '0 0 0.5rem', color: 'var(--primary)', fontWeight: 600 }}>AI Feedback</h4>
+          <p style={{ margin: 0, color: 'var(--text-main)', lineHeight: 1.6 }}>{atsResult.reasoning}</p>
         </div>
+
         {atsResult.pass_screening ? (
           <div>
-            <p className="status-pass">✓ You've passed the initial screening! Proceed to the technical interview.</p>
+            <p className="status-pass" style={{ color: 'var(--success)', fontWeight: 600, fontSize: '1.1rem', marginBottom: '1.5rem' }}>
+              ✓ You've passed the initial screening! Proceed to the technical interview.
+            </p>
             <button id="proceed-interview-btn" className="btn-primary" onClick={proceedToInterview}>
-              Start Technical Interview
+              Begin Technical Interview
             </button>
           </div>
         ) : (
           <div>
-            <p className="status-fail">✗ Unfortunately, your resume did not meet the minimum threshold (80%) for this role.</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            <p className="status-fail" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: '1.1rem', marginBottom: '1rem' }}>
+              ✗ Unfortunately, your resume did not meet the minimum threshold (80%) for this role.
+            </p>
+            <p style={{ color: 'var(--text-muted)' }}>
               Consider updating your resume with more relevant skills and experience for the {candidate?.job_role} position.
             </p>
           </div>
@@ -257,11 +312,11 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
   // Step 3: Technical Interview
   if (step === 'interview') {
     return (
-      <div className="glass-panel" style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div className="glass-panel" style={{ maxWidth: '800px', margin: '2rem auto' }}>
         <h2 className="title">Technical Interview</h2>
         {uploadError && <div className="error-banner">{uploadError}</div>}
         {interviewComplete ? (
-          <div>
+          <div style={{ textAlign: 'center' }}>
             <div className="score-display">
               <div className={`score-circle ${interviewScore >= 60 ? 'score-pass' : 'score-fail'}`}>
                 {interviewScore.toFixed(0)}
@@ -269,42 +324,45 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
               <p className="score-label">Interview Score</p>
             </div>
             {interviewDetails.length > 0 && (
-              <div className="interview-details">
-                <h4>Question Breakdown</h4>
+              <div className="interview-details" style={{ textAlign: 'left', marginTop: '2rem' }}>
+                <h4 style={{ color: 'var(--primary)', marginBottom: '1rem' }}>Question Breakdown</h4>
                 {interviewDetails.map((d, i) => (
-                  <div key={i} className="detail-card">
-                    <p className="detail-question">Q{i + 1}: {d.question}</p>
-                    <div className="detail-meta">
-                      <span className="detail-score">Score: {d.score.toFixed(0)}/100</span>
-                      <span className="detail-reasoning">{d.reasoning}</span>
+                  <div key={i} style={{ background: 'var(--bg-surface-low)', padding: '1.5rem', borderRadius: '16px', marginBottom: '1rem', border: '1px solid var(--ghost-border)' }}>
+                    <p style={{ margin: '0 0 0.5rem', fontWeight: 600, color: '#fff' }}>Q{i + 1}: {d.question}</p>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.8rem', fontSize: '0.9rem' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Score: {d.score.toFixed(0)}/100</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{d.reasoning}</span>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            <button id="proceed-screening-btn" className="btn-primary" onClick={proceedToScreening}>
+            <button id="proceed-screening-btn" className="btn-primary" style={{ marginTop: '2rem' }} onClick={proceedToScreening}>
               Proceed to HR Screening
             </button>
           </div>
         ) : (
           <div>
-            <div className="interview-header">
-              <span className="question-counter">Question {questionNumber} of {totalQuestions}</span>
-              <div className={`timer ${timer <= 10 ? 'timer-urgent' : ''}`}>
+            <div className="interview-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Question {questionNumber} of {totalQuestions}</span>
+              <div className={`timer ${timer <= 10 ? 'timer-urgent' : ''}`} style={{ fontSize: '1.5rem', fontWeight: 700, color: timer <= 10 ? 'var(--danger)' : 'var(--text-main)' }}>
                 00:{timer < 10 ? `0${timer}` : timer}
               </div>
             </div>
-            <div className="progress-bar">
+            
+            <div style={{ width: '100%', height: '6px', background: 'var(--bg-surface-low)', borderRadius: '3px', overflow: 'hidden', marginBottom: '2rem' }}>
               <div
-                className="progress-fill"
-                style={{ width: `${((totalQuestions - questionNumber) / totalQuestions) * 100}%` }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, var(--primary), var(--success))', width: `${((totalQuestions - questionNumber) / totalQuestions) * 100}%`, transition: 'width 0.5s ease' }}
               />
             </div>
-            <p style={{ fontSize: '1.1rem', marginBottom: '1rem', lineHeight: '1.6' }}>{question}</p>
+            
+            <p style={{ fontSize: '1.2rem', marginBottom: '1.5rem', lineHeight: '1.6', color: '#fff' }}>{question}</p>
+            
             <textarea
               id="answer-input"
               className="input-field"
-              rows={5}
+              rows={6}
+              style={{ background: 'var(--bg-base)' }}
               placeholder="Type your answer here..."
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
@@ -312,9 +370,12 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
               onPaste={handleCopyPaste}
               onCut={handleCopyPaste}
             />
-            <button id="submit-answer-btn" className="btn-primary" onClick={submitAnswer}>
-              Submit Answer
-            </button>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button id="submit-answer-btn" className="btn-primary" style={{ width: 'auto', padding: '0.75rem 2rem' }} onClick={submitAnswer}>
+                Submit Answer
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -345,9 +406,9 @@ export default function CandidatePortal({ apiBase }: { apiBase: string }) {
 
   // Step 6: Done
   return (
-    <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+    <div className="glass-panel" style={{ maxWidth: '600px', margin: '2rem auto', textAlign: 'center' }}>
       <h2 className="title" style={{ color: 'var(--success)' }}>🎉 Application Complete</h2>
-      <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
+      <p style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#fff' }}>
         Thank you for completing the recruitment process! You should receive a confirmation email shortly.
       </p>
       <p style={{ color: 'var(--text-muted)' }}>

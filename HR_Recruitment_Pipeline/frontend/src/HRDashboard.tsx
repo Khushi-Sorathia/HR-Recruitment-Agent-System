@@ -63,7 +63,6 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   // ─── Fetch Dashboard Data ──────────────────────────────────────────
-
   const fetchCandidates = async () => {
     setLoading(true);
     try {
@@ -88,23 +87,28 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
   }, [roleFilter, stageFilter]);
 
   // ─── Chatbot WebSocket ─────────────────────────────────────────────
-
   useEffect(() => {
+    let isCancelled = false;
     const wsUrl = apiBase.replace('http', 'ws');
     const socket = new WebSocket(`${wsUrl}/api/ws/hr-chatbot`);
     socket.onmessage = (event) => {
+      if (isCancelled) return;
       setChatLog((prev) => [...prev, { sender: 'bot', text: event.data }]);
-      // Refresh dashboard after bot responds (might have updated data)
+      // Refresh dashboard after bot responds
       fetchCandidates();
     };
     socket.onerror = () => {
+      if (isCancelled) return;
       setChatLog((prev) => [
         ...prev,
         { sender: 'bot', text: 'Connection error. Is the backend running?' },
       ]);
     };
     setWs(socket);
-    return () => socket.close();
+    return () => {
+      isCancelled = true;
+      socket.close();
+    };
   }, []);
 
   const sendChat = (e: React.FormEvent) => {
@@ -118,18 +122,15 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
   };
 
   // ─── Stats ─────────────────────────────────────────────────────────
-
   const totalCandidates = candidates.length;
   const avgATS = totalCandidates > 0
     ? (candidates.reduce((sum, c) => sum + c.ats_score, 0) / totalCandidates).toFixed(1)
     : '0';
   const inPipeline = candidates.filter((c) => c.pipeline_stage !== 'Rejected').length;
 
-  // ─── Render ────────────────────────────────────────────────────────
-
   return (
     <div className="glass-panel">
-      <h2 className="title">Recruitment Pipeline</h2>
+      <h2 className="title">Talent Intelligence Dashboard</h2>
 
       {/* Stats Row */}
       <div className="stats-row">
@@ -150,9 +151,8 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
       {/* Filters */}
       <div className="filters-row">
         <div className="filter-group">
-          <label>Role:</label>
+          <label>Role</label>
           <select
-            id="role-filter"
             className="input-field filter-select"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -163,9 +163,8 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
           </select>
         </div>
         <div className="filter-group">
-          <label>Stage:</label>
+          <label>Stage</label>
           <select
-            id="stage-filter"
             className="input-field filter-select"
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value)}
@@ -175,48 +174,58 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
             ))}
           </select>
         </div>
-        <button className="btn-refresh" onClick={fetchCandidates}>↻ Refresh</button>
+        <button className="btn-refresh" onClick={fetchCandidates}>
+          <span style={{ fontSize: '1.2rem' }}>↻</span> Refresh Data
+        </button>
       </div>
 
       {/* Candidates Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           Loading candidates...
         </div>
       ) : candidates.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           No candidates found. Upload a resume through the Candidate Portal to get started.
         </div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Candidate</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>ATS Score</th>
-              <th>Interview Score</th>
-              <th>Stage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {candidates.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{c.email}</td>
-                <td>{c.job_role}</td>
-                <td>{c.ats_score.toFixed(0)}%</td>
-                <td>{c.total_score > 0 ? c.total_score.toFixed(0) : '—'}</td>
-                <td><span className={`badge ${getBadgeClass(c.pipeline_stage)}`}>{c.pipeline_stage}</span></td>
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Candidate Details</th>
+                <th>Role</th>
+                <th>ATS Score</th>
+                <th>Interview Score</th>
+                <th>Current Stage</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {candidates.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <div className="candidate-name">{c.name}</div>
+                    <div className="candidate-email">{c.email}</div>
+                  </td>
+                  <td>{c.job_role}</td>
+                  <td style={{ fontWeight: 500 }}>{c.ats_score.toFixed(0)}%</td>
+                  <td style={{ fontWeight: 500, color: 'var(--primary)' }}>
+                    {c.total_score > 0 ? c.total_score.toFixed(0) : '—'}
+                  </td>
+                  <td><span className={`badge ${getBadgeClass(c.pipeline_stage)}`}>{c.pipeline_stage}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* Chatbot */}
+      {/* Chatbot Window */}
       <div className="chatbot-area">
-        <h3>HR Chatbot (AI)</h3>
+        <div className="chatbot-header">
+          <div className="bot-avatar">AI</div>
+          <h3>TalentAI Assistant</h3>
+        </div>
         <div className="chatbot-messages">
           {chatLog.map((log, i) => (
             <div key={i} className={`msg ${log.sender === 'bot' ? 'msg-bot' : 'msg-user'}`}>
@@ -224,20 +233,22 @@ export default function HRDashboard({ apiBase }: { apiBase: string }) {
             </div>
           ))}
         </div>
-        <form onSubmit={sendChat} style={{ display: 'flex', gap: '1rem' }}>
-          <input
-            id="chatbot-input"
-            className="input-field"
-            style={{ marginBottom: 0 }}
-            placeholder="Query candidates or change stages..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <button id="chatbot-send" type="submit" className="btn-primary" style={{ width: 'auto' }}>
-            Send
-          </button>
-        </form>
+        <div className="chatbot-input-area">
+          <form className="chatbot-input-form" onSubmit={sendChat}>
+            <input
+              id="chatbot-input"
+              className="input-field"
+              placeholder="Ask anything about candidates, stage changes, or scheduling..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+            <button id="chatbot-send" type="submit" className="btn-primary">
+              Send
+            </button>
+          </form>
+        </div>
       </div>
+
     </div>
   );
 }
